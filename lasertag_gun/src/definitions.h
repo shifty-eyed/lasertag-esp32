@@ -1,4 +1,6 @@
-#define PLAYER_ID 2
+#define PLAYER_ID 3
+//#define VEST
+#define GUN
 
 #define MAX_PLAYERS 16
 #define GUN_FIRE_INTERVAL 300
@@ -25,10 +27,7 @@ const char* ssid = "imenilenina-bistro";
 const char* password = "10101010";
 
 #include <WiFi.h>
-IPAddress serverIp = IPAddress(192, 168, 4, 95);
-
-#define VEST
-//#define GUN
+const IPAddress discoveryServerIp = IPAddress(255, 255, 255, 255);
 
 #ifdef VEST
 const int udpPort = 9877;
@@ -36,4 +35,4 @@ const int udpPort = 9877;
 #ifdef GUN
 const int udpPort = 9876;
 #endif
-const unsigned int localUdpPort = udpPort;
+const unsigned int localUdpPort = 1234;

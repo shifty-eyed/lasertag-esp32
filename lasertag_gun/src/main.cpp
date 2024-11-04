@@ -8,6 +8,7 @@
 
 WiFiUDP udp;
 char incomingPacket[16];
+IPAddress serverIp = discoveryServerIp;
 TaskHandle_t udpSendTaskHandle = NULL;
 TaskHandle_t udpReceiveTaskHandle = NULL;
 
@@ -123,7 +124,7 @@ void connectToWiFi() {
   }
 
   Serial.println("Connected to WiFi.");
-  Serial.print("IP Address: ");
+  Serial.print("Local IP Address: ");
   Serial.println(WiFi.localIP());
 }
 
@@ -154,6 +155,7 @@ void taskUdpReceiver(void* pvParameters) {
   while (1) {
     int packetSize = udp.parsePacket();
     if (packetSize) {
+      serverIp = udp.remoteIP();
       int len = udp.read(incomingPacket, sizeof(incomingPacket));
       if (len == 0) {
         Serial.println("Received Empty message");
