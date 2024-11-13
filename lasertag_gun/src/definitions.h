@@ -1,14 +1,29 @@
-#define PLAYER_ID 3
-//#define VEST
-#define GUN
+#define PLAYER_ID 2
+#define VEST
+//#define GUN
 
 #define MAX_PLAYERS 16
-#define GUN_FIRE_INTERVAL 300
+#define GUN_FIRE_INTERVAL 400
 
 #define MSG_TYPE_PING 1
 #define MSG_TYPE_GUN_SHOT 2
 #define MSG_TYPE_GUN_RELOAD 3
 #define MSG_TYPE_VEST_HIT 4
+#define MSG_TYPE_PLAYER_STATE 5
+
+
+#define TEAM_RED 1
+#define TEAM_BLUE 2
+#define TEAM_GREEN 3
+#define TEAM_YELLOW 4
+#define TEAM_MAGENTA 5
+#define TEAM_CYAN 6
+
+
+#define PLATER_STATE_IDLE 1
+#define PLATER_STATE_PLAY 2
+#define PLATER_STATE_DEAD 3
+
 
 #define IR_LED_PIN 13
 #define IR_RECEIVER_PIN 27

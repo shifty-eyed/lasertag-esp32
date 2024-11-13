@@ -7,33 +7,65 @@
 #include "definitions.h"
 
 WiFiUDP udp;
-char incomingPacket[16];
 IPAddress serverIp = discoveryServerIp;
 TaskHandle_t udpSendTaskHandle = NULL;
 TaskHandle_t udpReceiveTaskHandle = NULL;
 
 volatile uint32_t lastPingTime = 999;
+volatile int8_t playerTeam = TEAM_GREEN;
+volatile int8_t playerState = PLATER_STATE_IDLE;
+volatile int8_t bulletsLeft = 0;
 
 bool isOnline() {
   return lastPingTime < 5;
 }
 
+void colorLedsOff() {
+  digitalWrite(STATUS_LED_GREEN_LO, HIGH);
+  digitalWrite(STATUS_LED_BLUE_LO, HIGH);
+  digitalWrite(STATUS_LED_RED_LO, HIGH);
+}
+
 void taskStatusLed(void *pvParameters) {
   while (1) {
+    colorLedsOff();
     if (!isOnline()) {
-      digitalWrite(STATUS_LED_GREEN_LO, HIGH);
-      digitalWrite(STATUS_LED_BLUE_LO, HIGH);
-      digitalWrite(STATUS_LED_RED_LO, HIGH);
-
       digitalWrite(STATUS_LED_RED, HIGH);
       vTaskDelay(500 / portTICK_PERIOD_MS);
       digitalWrite(STATUS_LED_RED, LOW);
       vTaskDelay(500 / portTICK_PERIOD_MS);
     } else {
-      digitalWrite(STATUS_LED_GREEN_LO, LOW);
-      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      switch (playerTeam) {
+        case TEAM_RED: 
+          digitalWrite(STATUS_LED_RED_LO, LOW);
+          break;
+        case TEAM_BLUE:
+          digitalWrite(STATUS_LED_BLUE_LO, LOW);
+          break;
+        case TEAM_GREEN:
+          digitalWrite(STATUS_LED_GREEN_LO, LOW);
+          break;
+        case TEAM_YELLOW:
+          digitalWrite(STATUS_LED_RED_LO, LOW);
+          digitalWrite(STATUS_LED_GREEN_LO, LOW);
+          break;
+        case TEAM_MAGENTA:
+          digitalWrite(STATUS_LED_RED_LO, LOW);
+          digitalWrite(STATUS_LED_BLUE_LO, LOW);
+          break;
+        case TEAM_CYAN:
+          digitalWrite(STATUS_LED_BLUE_LO, LOW);
+          digitalWrite(STATUS_LED_GREEN_LO, LOW);
+          break;
+      }
+      if (playerState == PLATER_STATE_PLAY) {
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+      } else {
+        vTaskDelay(20 / portTICK_PERIOD_MS);
+        colorLedsOff();
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+      }
     }
-    
   }
 }
 
@@ -73,9 +105,10 @@ void loop() {
   int reloadButtonState = digitalRead(RELOAD_PIN);
 
   if (fireButtonState == LOW && isOnline()) {
-    IrSender.sendSony(COMMON_IR_ADDRESS, PLAYER_ID, 1, SIRCS_12_PROTOCOL);
+    if (bulletsLeft > 0) {
+      IrSender.sendSony(COMMON_IR_ADDRESS, PLAYER_ID, 1, SIRCS_12_PROTOCOL);
+    }
     sendUdpMessage(MSG_TYPE_GUN_SHOT, 0);
-    Serial.println("Sent");
     vTaskDelay(GUN_FIRE_INTERVAL / portTICK_PERIOD_MS);
   }
 
@@ -152,6 +185,7 @@ void taskUdpHeartbeat(void* pvParameters) {
 }
 
 void taskUdpReceiver(void* pvParameters) {
+  char incomingPacket[16];
   while (1) {
     int packetSize = udp.parsePacket();
     if (packetSize) {
@@ -161,10 +195,22 @@ void taskUdpReceiver(void* pvParameters) {
         Serial.println("Received Empty message");
         continue;
       }
-
-      //Serial.printf("Received Ping ACK: %d\n", incomingPacket[0]);
       lastPingTime = 0;
+
+      int8_t type = incomingPacket[0];
+      if (type == MSG_TYPE_PING) {
+        //Serial.printf("Received Ping ACK: %d\n", incomingPacket[0]);
+      } else if (type == MSG_TYPE_PLAYER_STATE) {
+        if (len < 3) {
+          Serial.println("Invalid player state message length");
+          continue;
+        }
+        playerTeam = incomingPacket[1];
+        playerState = incomingPacket[2];
+        bulletsLeft = incomingPacket[3];
+        Serial.printf("Received Player Info: team=%d, state=%d, bullets=%d\n", playerTeam, playerState, bulletsLeft);
+      }
     }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(20 / portTICK_PERIOD_MS);
   }
 }
