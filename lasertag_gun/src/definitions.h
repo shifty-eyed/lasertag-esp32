@@ -1,6 +1,6 @@
-#define PLAYER_ID 2
-#define VEST
-//#define GUN
+#define PLAYER_ID 1
+//#define VEST
+#define GUN
 
 #define MAX_PLAYERS 16
 #define GUN_FIRE_INTERVAL 400
