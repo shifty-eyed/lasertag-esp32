@@ -2,22 +2,21 @@
 #include <IRremote.hpp>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include <WiFi.h>
-#include <WiFiUdp.h>
 #include "definitions.h"
+#include <BluetoothSerial.h>
 
-WiFiUDP udp;
-IPAddress serverIp = discoveryServerIp;
+BluetoothSerial SerialBT;
 TaskHandle_t udpSendTaskHandle = NULL;
 TaskHandle_t udpReceiveTaskHandle = NULL;
 
-volatile uint32_t lastPingTime = 999;
-volatile int8_t playerTeam = TEAM_GREEN;
-volatile int8_t playerState = PLATER_STATE_IDLE;
-volatile int8_t bulletsLeft = 0;
+static volatile uint32_t pingsSentWithNoResponse = 5;
+static volatile int8_t playerId = 0;
+static volatile int8_t playerTeam = TEAM_GREEN;
+static volatile int8_t playerState = PLATER_STATE_IDLE;
+static volatile int8_t bulletsLeft = 0;
 
-bool isOnline() {
-  return lastPingTime < 5;
+static bool isOnline() {
+  return pingsSentWithNoResponse < 3;
 }
 
 void colorLedsOff() {
@@ -69,11 +68,10 @@ void taskStatusLed(void *pvParameters) {
   }
 }
 
-void connectToWiFi();
-void taskUdpHeartbeat(void* pvParameters);
-void taskUdpReceiver(void* pvParameters);
+void taskHeartbeat(void* pvParameters);
+void taskBTReceiver(void* pvParameters);
 void taskIRReceiver(void* pvParameters);
-void sendUdpMessage(int8_t messageType, int8_t counterpartPlayerId);
+void sendBTMessage(int8_t messageType, int8_t counterpartPlayerId);
 
 void setup() {
   Serial.begin(9600);
@@ -87,15 +85,20 @@ void setup() {
   pinMode(STATUS_LED_BLUE_LO, OUTPUT);
   pinMode(STATUS_LED_GREEN_LO, OUTPUT);
 
-  Serial.println("Ready");
-
   xTaskCreate(taskStatusLed, "taskStatusLed", 2048, NULL, 1, NULL);
 
-  connectToWiFi();
-  udp.begin(localUdpPort);
-  Serial.println("UDP started on port: " + String(localUdpPort));
-  xTaskCreate(taskUdpHeartbeat, "taskUdpHeartbeat", 2048, NULL, 1, &udpSendTaskHandle);
-  xTaskCreate(taskUdpReceiver, "taskUdpReceiver", 2048, NULL, 1, &udpReceiveTaskHandle);
+  if (!SerialBT.begin(deviceName)) {
+      Serial.println("An error occurred initializing Bluetooth");
+  } else {
+      while (!SerialBT.connected(2000)) {
+        Serial.println("Connecting BT..");
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+      }
+      Serial.println("BT connected.");
+  }
+  
+  xTaskCreate(taskHeartbeat, "taskHeartbeat", 2048, NULL, 1, &udpSendTaskHandle);
+  xTaskCreate(taskBTReceiver, "taskBTReceiver", 2048, NULL, 1, &udpReceiveTaskHandle);
   xTaskCreate(taskIRReceiver, "taskIRReceiver", 2048, NULL, 1, &udpReceiveTaskHandle);
 }
 
@@ -105,16 +108,16 @@ void loop() {
   int reloadButtonState = digitalRead(RELOAD_PIN);
 
   if (fireButtonState == LOW && isOnline()) {
-    if (bulletsLeft > 0) {
-      IrSender.sendSony(COMMON_IR_ADDRESS, PLAYER_ID, 1, SIRCS_12_PROTOCOL);
+    if (bulletsLeft > 0 && playerId != 0 && playerState == PLATER_STATE_PLAY) {
+      IrSender.sendSony(IR_ADDRESS_GUN, playerId, 1, SIRCS_12_PROTOCOL);
     }
-    sendUdpMessage(MSG_TYPE_GUN_SHOT, 0);
+    sendBTMessage(MSG_TYPE_GUN_SHOT, 0);
     vTaskDelay(GUN_FIRE_INTERVAL / portTICK_PERIOD_MS);
   }
 
   if (reloadButtonState == LOW) {
     Serial.println("Reload");
-    sendUdpMessage(MSG_TYPE_GUN_RELOAD, 0);
+    sendBTMessage(MSG_TYPE_GUN_RELOAD, 0);
     vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
   vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -128,87 +131,86 @@ void taskIRReceiver(void *pvParameters) {
   }
 
   while (1) {
-    if (IrReceiver.decode()) {
-      if (IrReceiver.decodedIRData.address == COMMON_IR_ADDRESS) {
-        uint8_t hitByPlayer = (uint8_t)IrReceiver.decodedIRData.command;
-        if (hitByPlayer != PLAYER_ID 
+    if (IrReceiver.decodeSony()) {
+      uint8_t address = (uint8_t)IrReceiver.decodedIRData.address;
+      uint8_t command = (uint8_t)IrReceiver.decodedIRData.command;
+      if (address == IR_ADDRESS_GUN) {
+        uint8_t hitByPlayer = command;
+        if (hitByPlayer != playerId 
           && (millis() - playersHitRecentHit[hitByPlayer] > GUN_FIRE_INTERVAL)) {
           playersHitRecentHit[hitByPlayer] = millis();
           Serial.println("Hit by player: " + String(hitByPlayer));
-          sendUdpMessage(MSG_TYPE_VEST_HIT, hitByPlayer);
+          sendBTMessage(MSG_TYPE_VEST_HIT, hitByPlayer);
         } else {
           Serial.println("Hit by myself");
         }
+      } else if (address == IR_ADDRESS_RESPAWN && playerState == PLATER_STATE_DEAD) {
+        uint8_t respawnPointId = command;
+        Serial.println("Respawn");
+        sendBTMessage(MSG_TYPE_RESPAWN, respawnPointId);
+      } else if (address == IR_ADDRESS_AMMO && playerState == PLATER_STATE_PLAY) {
+        Serial.println("Got Ammo");
+        sendBTMessage(MSG_TYPE_GOT_AMMO, command);
+      } else if (address == IR_ADDRESS_HEALTH && playerState == PLATER_STATE_PLAY) {
+        Serial.println("Got Health");
+        sendBTMessage(MSG_TYPE_GOT_HEALTH, command);
+      } else if (address == IR_ADDRESS_FLAG && playerState == PLATER_STATE_PLAY) {
+        Serial.println("Flag");
+        sendBTMessage(MSG_TYPE_FLAG, command);
       }
       IrReceiver.resume();
-      
     }
     vTaskDelay(50 / portTICK_PERIOD_MS);
   }
 }
 
-void connectToWiFi() {
-  Serial.println("Connecting to WiFi...");
-  WiFi.begin(ssid, password);
+void sendBTMessage(int8_t messageType, int8_t counterpartPlayerId) {
+  SerialBT.write(messageType);
+  SerialBT.write(counterpartPlayerId);
+  SerialBT.write(STOP_BYTE);
+  SerialBT.flush();
 
-  while (WiFi.status() != WL_CONNECTED) {
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
-    Serial.println("Connecting...");
-  }
-
-  Serial.println("Connected to WiFi.");
-  Serial.print("Local IP Address: ");
-  Serial.println(WiFi.localIP());
-}
-
-void sendUdpMessage(int8_t messageType, int8_t counterpartPlayerId) {
-  if (WiFi.status() != WL_CONNECTED) {
-    return;
-  }
-  udp.beginPacket(serverIp, udpPort);
-  udp.write(messageType);
-  udp.write(PLAYER_ID);
-  udp.write(counterpartPlayerId);
-  udp.endPacket();
   if (messageType != MSG_TYPE_PING) {
-    Serial.println("Sent UDP message: " + String(messageType));
+    Serial.println("Sent BT message: " + String(messageType));
   }
 }
 
-void taskUdpHeartbeat(void* pvParameters) {
+void taskHeartbeat(void* pvParameters) {
   while (1) {
-    sendUdpMessage(MSG_TYPE_PING, 0);
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    lastPingTime ++;
+    if (pingsSentWithNoResponse < 10) {
+      sendBTMessage(MSG_TYPE_PING, 0);
+      pingsSentWithNoResponse ++;
+    }
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
   }
   vTaskDelete(NULL);
 }
 
-void taskUdpReceiver(void* pvParameters) {
+void taskBTReceiver(void* pvParameters) {
   char incomingPacket[16];
   while (1) {
-    int packetSize = udp.parsePacket();
-    if (packetSize) {
-      serverIp = udp.remoteIP();
-      int len = udp.read(incomingPacket, sizeof(incomingPacket));
+    if (SerialBT.available()) {
+      int len = SerialBT.readBytesUntil(STOP_BYTE, incomingPacket, sizeof(incomingPacket));
       if (len == 0) {
         Serial.println("Received Empty message");
         continue;
       }
-      lastPingTime = 0;
+      pingsSentWithNoResponse = 0;
 
       int8_t type = incomingPacket[0];
       if (type == MSG_TYPE_PING) {
-        //Serial.printf("Received Ping ACK: %d\n", incomingPacket[0]);
-      } else if (type == MSG_TYPE_PLAYER_STATE) {
+        Serial.printf("Received Ping ACK: %d\n", incomingPacket[0]);
+      } else if (type == MSG_TYPE_IN_PLAYER_STATE) {
         if (len < 3) {
           Serial.println("Invalid player state message length");
           continue;
         }
-        playerTeam = incomingPacket[1];
-        playerState = incomingPacket[2];
-        bulletsLeft = incomingPacket[3];
-        Serial.printf("Received Player Info: team=%d, state=%d, bullets=%d\n", playerTeam, playerState, bulletsLeft);
+        playerId = incomingPacket[1];
+        playerTeam = incomingPacket[2];
+        playerState = incomingPacket[3];
+        bulletsLeft = incomingPacket[4];
+        Serial.printf("Received Player Info: playerId=%d, team=%d, state=%d, bullets=%d\n", 
+          playerId, playerTeam, playerState, bulletsLeft);
       }
     }
     vTaskDelay(20 / portTICK_PERIOD_MS);
