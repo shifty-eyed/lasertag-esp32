@@ -131,9 +131,10 @@ void taskIRReceiver(void *pvParameters) {
   }
 
   while (1) {
-    if (IrReceiver.decodeSony()) {
+    if (IrReceiver.decode()) {
       uint8_t address = (uint8_t)IrReceiver.decodedIRData.address;
       uint8_t command = (uint8_t)IrReceiver.decodedIRData.command;
+      //Serial.println("IR received. Address: " + String(address) + ", Command: " + String(command));
       if (address == IR_ADDRESS_GUN) {
         uint8_t hitByPlayer = command;
         if (hitByPlayer != playerId 
