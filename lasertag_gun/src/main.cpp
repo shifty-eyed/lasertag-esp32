@@ -161,7 +161,7 @@ void taskIRReceiver(void *pvParameters) {
       }
       IrReceiver.resume();
     }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(30 / portTICK_PERIOD_MS);
   }
 }
 
