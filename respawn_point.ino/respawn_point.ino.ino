@@ -14,13 +14,13 @@
 #include <IRremote.hpp>
 
 
-constexpr uint8_t DEVICE_ID            = 5;
+constexpr uint8_t DEVICE_ID            = 0;
 
 constexpr uint8_t IR_ADDRESS_RESPAWN   = 1; // never changes
 
 
 constexpr uint8_t PIN_IR_LED           = 3;   // PWM‑capable pin on Nano
-constexpr uint32_t TX_INTERVAL_MS      = 2000;
+constexpr uint32_t TX_INTERVAL_MS      = 200;
 
 
 constexpr uint8_t PIN_STATUS_LED       = LED_BUILTIN;
@@ -29,22 +29,14 @@ constexpr uint8_t PIN_STATUS_LED       = LED_BUILTIN;
 
 void setup() {
   pinMode(PIN_STATUS_LED, OUTPUT);
-
   IrSender.begin(PIN_IR_LED, false, 0);
 }
 
 void loop() {
-  static uint32_t lastTx = 0;
-  const uint32_t now = millis();
-
-  if (now - lastTx >= TX_INTERVAL_MS) {
-    lastTx = now;
-
-    IrSender.sendSony(IR_ADDRESS_RESPAWN, DEVICE_ID, 3, SIRCS_12_PROTOCOL);
-
-    // Blink status LED briefly
-    digitalWrite(PIN_STATUS_LED, HIGH);
-    delay(10);
-    digitalWrite(PIN_STATUS_LED, LOW);
-  }
+  digitalWrite(PIN_STATUS_LED, HIGH);
+  delay(10);
+  digitalWrite(PIN_STATUS_LED, LOW);
+  
+  IrSender.sendSony(IR_ADDRESS_RESPAWN, DEVICE_ID, 4, SIRCS_12_PROTOCOL);
+  delay(TX_INTERVAL_MS);
 }
