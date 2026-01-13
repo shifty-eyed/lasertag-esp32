@@ -30,8 +30,10 @@ void taskStatusLed(void *pvParameters) {
     colorLedsOff();
     if (!isOnline()) {
       digitalWrite(STATUS_LED_RED, HIGH);
+      digitalWrite(STATUS_LED_ONBOARD, LOW);
       vTaskDelay(500 / portTICK_PERIOD_MS);
       digitalWrite(STATUS_LED_RED, LOW);
+      digitalWrite(STATUS_LED_ONBOARD, HIGH);
       vTaskDelay(500 / portTICK_PERIOD_MS);
     } else {
       switch (playerTeam) {
@@ -84,6 +86,7 @@ void setup() {
   pinMode(STATUS_LED_RED_LO, OUTPUT);
   pinMode(STATUS_LED_BLUE_LO, OUTPUT);
   pinMode(STATUS_LED_GREEN_LO, OUTPUT);
+  pinMode(STATUS_LED_ONBOARD, OUTPUT);
 
   xTaskCreate(taskStatusLed, "taskStatusLed", 2048, NULL, 1, NULL);
 
