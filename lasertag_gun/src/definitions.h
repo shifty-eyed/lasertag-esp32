@@ -1,5 +1,12 @@
-//#define VEST
-#define GUN
+
+#define VEST
+//#define GUN
+
+#define WIRING_MODE_WIRELESS 1
+#define WIRING_MODE_WIRED 2
+
+#define WIRING_MODE WIRING_MODE_WIRED
+
 
 #define MAX_PLAYERS 16
 #define GUN_FIRE_INTERVAL 300
@@ -13,6 +20,7 @@
 #define MSG_TYPE_GOT_HEALTH 16
 #define MSG_TYPE_GOT_AMMO 17
 #define MSG_TYPE_FLAG 18
+#define MSG_TYPE_WIRED_PING 19
 
 
 #define MSG_TYPE_IN_PLAYER_STATE 13
@@ -35,6 +43,15 @@
 
 #define FIRE_PIN 12
 #define RELOAD_PIN 14
+
+#ifdef VEST
+#define WIRED_UART_RX_PIN 16
+#define WIRED_UART_TX_PIN 17
+#endif
+#ifdef GUN
+#define WIRED_UART_RX_PIN 17
+#define WIRED_UART_TX_PIN 16
+#endif
 
 #define STATUS_LED_RED 26
 #define STATUS_LED_BLUE_LO 25
