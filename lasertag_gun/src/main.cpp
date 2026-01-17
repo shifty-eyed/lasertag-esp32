@@ -30,7 +30,7 @@ static bool isOnline() {
 
 void taskStatusLed(void *pvParameters) {
   while (1) {
-    loadControlCycle(isOnline(), playerTeam, playerState);
+    ledControlCycle(isOnline(), playerTeam, playerState);
   }
 }
 
@@ -45,12 +45,7 @@ void setup() {
 
   pinMode(FIRE_PIN, INPUT_PULLUP);
   pinMode(RELOAD_PIN, INPUT_PULLUP);
-  pinMode(STATUS_LED_RED, OUTPUT);
-  pinMode(STATUS_LED_RED_LO, OUTPUT);
-  pinMode(STATUS_LED_BLUE_LO, OUTPUT);
-  pinMode(STATUS_LED_GREEN_LO, OUTPUT);
-  pinMode(STATUS_LED_ONBOARD, OUTPUT);
-
+  initStatusLedPwm();
   xTaskCreate(taskStatusLed, "taskStatusLed", 2048, NULL, 1, NULL);
 
 #if WIRING_MODE == WIRING_MODE_WIRELESS || defined(VEST)
