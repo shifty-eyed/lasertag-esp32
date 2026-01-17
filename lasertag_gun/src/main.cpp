@@ -3,6 +3,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "definitions.h"
+#include "led_control.h"
 #include <BluetoothSerial.h>
 
 BluetoothSerial SerialBT;
@@ -15,69 +16,6 @@ static volatile int8_t playerTeam = TEAM_GREEN;
 static volatile int8_t playerState = PLATER_STATE_IDLE;
 static volatile int8_t bulletsLeft = 0;
 
-static bool isOnline() {
-  return pingsSentWithNoResponse < 3;
-}
-
-static void colorLedOn(uint8_t pin, bool val) {
-  #ifdef VEST
-  digitalWrite(pin, val ? HIGH : LOW);
-  #else
-  digitalWrite(pin, val ? LOW : HIGH); //gun
-  #endif
-}
-
-void colorLedsOff() {
-  colorLedOn(STATUS_LED_GREEN_LO, false);
-  colorLedOn(STATUS_LED_BLUE_LO, false);
-  colorLedOn(STATUS_LED_RED_LO, false);
-}
-
-void taskStatusLed(void *pvParameters) {
-  while (1) {
-    colorLedsOff();
-    if (!isOnline()) {
-      digitalWrite(STATUS_LED_RED, HIGH);
-      digitalWrite(STATUS_LED_ONBOARD, LOW);
-      vTaskDelay(500 / portTICK_PERIOD_MS);
-      digitalWrite(STATUS_LED_RED, LOW);
-      digitalWrite(STATUS_LED_ONBOARD, HIGH);
-      vTaskDelay(500 / portTICK_PERIOD_MS);
-    } else {
-      switch (playerTeam) {
-        case TEAM_RED: 
-          colorLedOn(STATUS_LED_RED_LO, true);
-          break;
-        case TEAM_BLUE:
-          colorLedOn(STATUS_LED_BLUE_LO, true);
-          break;
-        case TEAM_GREEN:
-          colorLedOn(STATUS_LED_GREEN_LO, true);
-          break;
-        case TEAM_YELLOW:
-          colorLedOn(STATUS_LED_RED_LO, true);
-          colorLedOn(STATUS_LED_GREEN_LO, true);
-          break;
-        case TEAM_MAGENTA:
-          colorLedOn(STATUS_LED_RED_LO, true);
-          colorLedOn(STATUS_LED_BLUE_LO, true);
-          break;
-        case TEAM_CYAN:
-          colorLedOn(STATUS_LED_BLUE_LO, true);
-          colorLedOn(STATUS_LED_GREEN_LO, true);
-          break;
-      }
-      if (playerState == PLATER_STATE_PLAY) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-      } else {
-        vTaskDelay(20 / portTICK_PERIOD_MS);
-        colorLedsOff();
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-      }
-    }
-  }
-}
-
 void taskHeartbeat(void* pvParameters);
 void taskInboundReceiver(void* pvParameters);
 void taskIRReceiver(void* pvParameters);
@@ -85,6 +23,16 @@ void sendMessage(int8_t messageType, int8_t counterpartPlayerId);
 #if WIRING_MODE == WIRING_MODE_WIRED && defined(VEST)
 void taskWiredReceiver(void* pvParameters);
 #endif
+
+static bool isOnline() {
+  return pingsSentWithNoResponse < 3;
+}
+
+void taskStatusLed(void *pvParameters) {
+  while (1) {
+    loadControlCycle(isOnline(), playerTeam, playerState);
+  }
+}
 
 void setup() {
   Serial.begin(9600);
