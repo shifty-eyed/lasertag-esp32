@@ -19,7 +19,12 @@
 #define STATUS_LED_GREEN_CHANNEL 1
 #define STATUS_LED_BLUE_CHANNEL 2
 
-#define ON_LEVEL_NORMAL 10
+#ifdef VEST
+#define ON_LEVEL_NORMAL 20
+#else
+#define ON_LEVEL_NORMAL 255
+#endif
+
 
 static int8_t statusLedChannelForPin(uint8_t pin) {
   switch (pin) {
